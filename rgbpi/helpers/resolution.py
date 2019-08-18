@@ -11,6 +11,9 @@ Somehow final v_pos can't go below -9 -> this will break sync.
     I'm guessing VBI here
 
 
+h_zoom has the same issues. Good values are between -60 and 60. Everything
+else is ignored.
+
 """
 import os.path
 from collections import namedtuple
@@ -105,7 +108,7 @@ def prepare_crtinfo_config(vi):
 
     return info
     
-def set_gui_resolution(x_offset=6, y_offset=3, h_size=-288, frequency=FREQ_NTSC, trinitron_fix=False):
+def set_gui_resolution(x_offset=6, y_offset=3, h_size=-288, h_zoom=0, frequency=FREQ_NTSC, trinitron_fix=False):
     if trinitron_fix:
         crtinfo = CRTINFO_CLI_FIX
     else:
@@ -114,7 +117,7 @@ def set_gui_resolution(x_offset=6, y_offset=3, h_size=-288, frequency=FREQ_NTSC,
 
 
 def set_console_system_resolution(system, x_offset=6, y_offset=3,
-                               h_size=-288, frequency=FREQ_NTSC, trinitron_fix=False):
+                               h_size=-288, h_zoom=-40, frequency=FREQ_NTSC, trinitron_fix=False):
     """Prepare a VideoInfo for a console using local preferences and
        the systems database
     """
@@ -129,13 +132,14 @@ def set_console_system_resolution(system, x_offset=6, y_offset=3,
         system_video = apply_trinitron_fix(system_video)
     logger.debug("Applying video offset")
     system_video = apply_video_offset(system_video, frequency,
-                                        x_offset, y_offset, h_size)
+                                        x_offset, y_offset, h_size, h_zoom)
     crtinfo = prepare_crtinfo_config(system_video)
     return apply_hdmi_timings(crtinfo)
 
 
 def set_arcade_system_resolution(emulator, game, x_offset=6,
                                      y_offset=3, h_size=-288,
+                                     h_zoom=-40,
                                      frequency=FREQ_NTSC, trinitron_fix=False,
                                      arcade_format=ARCADE_DISPLAY_FORCED):
     logger.debug("set_console_system_resolution(system=%s, x_offset=%s, y_offset=%s, h_size=%s, frequency=%s, trinitron_fix=%s, arcade_format=%s)", system, x_offset, y_offset, h_size, frequency, trinitron_fix, arcade_format)
@@ -144,7 +148,7 @@ def set_arcade_system_resolution(emulator, game, x_offset=6,
                                                   system_video)
     system_video = apply_trinitron_fix(system_video)
     system_details = apply_video_offset(system_video, frequency,
-                                        x_offset, y_offset, h_size,
+                                        x_offset, y_offset, h_size, h_zoom,
                                         True, arcade_format)
     crtinfo = prepare_crtinfo_config(system_video)
     return apply_hdmi_timings(crtinfo)
@@ -198,7 +202,7 @@ def apply_trinitron_fix(vi):
 
 
 def apply_video_offset(vi, frequency,
-                       x_offset, y_offset, h_size,
+                       x_offset, y_offset, h_size, h_zoom,
                        arcade=False, arcade_format=ARCADE_DISPLAY_FORCED):
     """Transform the display settings in order to account for preferred offset
        and zoom
@@ -226,6 +230,8 @@ def apply_video_offset(vi, frequency,
     # manage zoom
     if vi.system in SPECIAL_RES_SYSTEMS:
         new_h_zoom += min(h_size / 16, 40)
+    elif -60 <= h_zoom <= 60:
+        new_h_zoom = h_zoom
     return vi._replace(
         h_pos=new_h_pos,
         v_pos=new_v_pos,

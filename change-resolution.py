@@ -27,6 +27,8 @@ DISPLAY_H_SIZE = int(os.environ.get('RGBPI_H_SIZE', '-288'))
 DISPLAY_H_ZOOM = int(os.environ.get('RGBPI_H_ZOOM', '-40'))
 """this is the physical horizontal zoom factor for the image. Good to
    compensate overscan and shite (you may read RPG texts this way).
+
+   Values beyond -60 and 60 are ignored.
 """
 
 
@@ -56,6 +58,7 @@ def main(system, emu, rom, cmdline):
             x_offset=DISPLAY_X_OFFSET,
             y_offset=DISPLAY_Y_OFFSET,
             h_size=DISPLAY_H_SIZE,
+            h_zoom=DISPLAY_H_ZOOM,
             frequency=frequency,
             trinitron_fix=DISPLAY_TRINITRON_FIX)
         logger.debug("Done changing resolution.")
