@@ -14,7 +14,7 @@ import shlex
 import time
 import subprocess
 
-TIMINGS_FILE_CONSOLE=os.path.abspath('../data/console-timings.cfg')
+TIMINGS_FILE_CONSOLE = os.path.abspath('../data/console-timings.cfg')
 TIMINGS_FILES_ARCADE = {
     'advmame': os.path.abspath('../data/advmame-timings.cfg'),
     'lr-fba': os.path.abspath('../data/lr-fba-timings.cfg'),
@@ -59,8 +59,8 @@ def apply_hdmi_timings(crt_info):
     return out
     
 
-def change_scart_resolution(vi):
-    """Take a VideoInfo and make it into a CRTInfo"""
+def prepare_crtinfo_config(vi):
+    """Take a VideoInfo, make it a CRT info"""
     # this is critical timing computations 
     h_fp = max(vi.h_fp - 4 * (vi.h_zoom + vi.h_pos), 0)
     h_bp = max(vi.h_bp - 4 * (vi.h_zoom - vi.h_pos), 0)
@@ -77,11 +77,10 @@ def change_scart_resolution(vi):
         h_res=vi.h_res, h_fp=h_fp, h_sync=vi.h_sync, h_bp=h_bp,
         v_res=vi.v_res, v_fp=v_fp, v_sync=vi.v_sync, v_bp=v_bp,
         r_rate=vi.r_rate, pixel_clock=pixel_clock)
-    return apply_hdmi_timings(info)
+    return info
     
 
-
-def prepare_console_system_resolution(system, x_offset=0, y_offset=0,
+def set_console_system_resolution(system, x_offset=0, y_offset=0,
                                h_size=320, frequency=FREQ_NTSC, trinitron_fix=False):
     """Prepare a VideoInfo for a console using local preferences and
        the systems database
@@ -94,10 +93,11 @@ def prepare_console_system_resolution(system, x_offset=0, y_offset=0,
         system_video = apply_trinitron_fix(system_video)
     system_details = apply_video_offset(system_video, frequency,
                                         x_offset, y_offset, h_size)
-    change_scart_resolution(system_video)
+    crtinfo = prepare_crtinfo_config(system_video)
+    return apply_hdmi_timings(crtinfo)
 
 
-def prepare_arcade_system_resolution(emulator, game, x_offset=0,
+def set_arcade_system_resolution(emulator, game, x_offset=0,
                                      y_offset=0, h_size=320,
                                      frequency=FREQ_NTSC, trinitron_fix=False,
                                      arcade_format=ARCADE_DISPLAY_FORCED):
@@ -105,11 +105,11 @@ def prepare_arcade_system_resolution(emulator, game, x_offset=0,
     system_video = apply_arcade_core_video_tweaks(emulator, arcade_format,
                                                   system_video)
     system_video = apply_trinitron_fix(system_video)
-    # todo: support screen rotation
     system_details = apply_video_offset(system_video, frequency,
                                         x_offset, y_offset, h_size,
                                         True, arcade_format)
-    change_scart_resolution(system_video)
+    crtinfo = prepare_crtinfo_config(system_video)
+    return apply_hdmi_timings(crtinfo)
 
 
 def apply_arcade_core_video_tweaks(arcade_format, vi):
@@ -139,7 +139,6 @@ def apply_arcade_core_video_tweaks(arcade_format, vi):
         h_freq=new_h_freq,
         h_pos=new_h_pos
         )
-    
     
 
 def apply_trinitron_fix(vi):
@@ -249,6 +248,16 @@ def load_system_details_arcade(arcade_emu, game):
 #    tokies[3] = float(searched[3])
     return VideoInfo(*tokies)
 
+
+__all__ = [
+    'VideoInfo',
+    'CRTInfo',
+    'set_console_system_resolution',
+    'set_arcade_system_resolution',
+    'TIMINGS_FILE_CONSOLE',
+    'TIMINGS_FILES_ARCADE',
+    'HD_XFACTOR',
+]
 
 if __name__ == '__main__':
     import sys
