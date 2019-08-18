@@ -5,6 +5,11 @@ Made to work with RGB-Pi cable.
 
 Compatible with Python 2.7 (because Retropie :'( )
 
+Notes:
+
+Somehow final v_pos can't go below -9 -> this will break sync.
+    I'm guessing VBI here
+
 
 """
 import os.path
@@ -82,21 +87,17 @@ def prepare_crtinfo_config(vi):
     h_bp = max(vi.h_bp - 4 * (vi.h_zoom - vi.h_pos), 0)
     h_total = vi.h_res + vi.h_sync + h_fp + h_bp
     v_total = int(ceil(vi.h_freq / vi.r_rate))
-    logger.debug("H_Freq: %s / R_Rate: %s -> V_Total: %s", vi.h_freq, vi.r_rate, v_total)
     horizontal = int(ceil(v_total * vi.r_rate))
-    logger.debug("V_Total: %s R_Rate: %s -> Horizontal: %s", v_total, vi.r_rate, horizontal)                                                                          
 
     pixel_clock = horizontal * h_total
-    logger.debug("Horizontal: %s H_Total: %s -> Pixel_Clock: %s", horizontal, h_total, pixel_clock)
     v_fp = int(floor(((v_total - vi.v_res) - vi.v_sync) /2))
     
     v_fp -= min(vi.v_pos, v_fp)
 
-    logger.debug("V_Total: %s V_Res: %s V_Sync: %s V_Pos: %s -> V_FP: %s", v_total, vi.v_res, vi.v_sync, vi.v_pos, v_fp)
     v_bp = v_total - vi.v_res
     v_bp = v_bp - vi.v_sync
     v_bp = int(v_bp - v_fp)
-    logger.debug("V_Total: %s V_Res: %s V_Sync: %s V_FP: %s -> V_BP: %s", v_total, vi.v_res, vi.v_sync, v_fp, v_bp)
+    
     info = CRTInfo(
         h_res=vi.h_res, h_fp=h_fp, h_sync=vi.h_sync, h_bp=h_bp,
         v_res=vi.v_res, v_fp=v_fp, v_sync=vi.v_sync, v_bp=v_bp,
@@ -117,6 +118,7 @@ def set_console_system_resolution(system, x_offset=6, y_offset=3,
     """Prepare a VideoInfo for a console using local preferences and
        the systems database
     """
+    logger.debug("set_console_system_resolution(system=%s, x_offset=%s, y_offset=%s, h_size=%s, frequency=%s, trinitron_fix=%s)", system, x_offset, y_offset, h_size, frequency, trinitron_fix)
     system_video = load_system_details(system, frequency)
 
     if system_video is None:
@@ -125,14 +127,10 @@ def set_console_system_resolution(system, x_offset=6, y_offset=3,
     if trinitron_fix:
         logger.debug("Applying Trinitron fixes")
         system_video = apply_trinitron_fix(system_video)
-        logger.debug("New config: %s", system_video)
     logger.debug("Applying video offset")
     system_video = apply_video_offset(system_video, frequency,
                                         x_offset, y_offset, h_size)
-    logger.debug("Video offset applied: %s", system_video)
     crtinfo = prepare_crtinfo_config(system_video)
-    logger.debug("Final video settings: %s", str(system_video))
-    logger.debug("CRT details: %s", str(crtinfo))
     return apply_hdmi_timings(crtinfo)
 
 
@@ -140,6 +138,7 @@ def set_arcade_system_resolution(emulator, game, x_offset=6,
                                      y_offset=3, h_size=-288,
                                      frequency=FREQ_NTSC, trinitron_fix=False,
                                      arcade_format=ARCADE_DISPLAY_FORCED):
+    logger.debug("set_console_system_resolution(system=%s, x_offset=%s, y_offset=%s, h_size=%s, frequency=%s, trinitron_fix=%s, arcade_format=%s)", system, x_offset, y_offset, h_size, frequency, trinitron_fix, arcade_format)
     system_video = load_system_details_arcade(emulator, game)
     system_video = apply_arcade_core_video_tweaks(emulator, arcade_format,
                                                   system_video)
@@ -217,7 +216,6 @@ def apply_video_offset(vi, frequency,
         new_h_pos += x_offset / HD_XFACTOR - 8
     else:
         raise RuntimeError("Unhandled case: frequency == ".format(frequency))
-    logger.debug("Computed h_pos: %s", new_h_pos)
     # manage v position
     if frequency == FREQ_NTSC:
         new_v_pos += y_offset

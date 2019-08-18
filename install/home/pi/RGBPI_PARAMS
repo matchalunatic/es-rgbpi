@@ -1,0 +1,8 @@
+#!/bin/sh
+# Sample RGBPI_PARAMS file (is nice with my TV 8-))
+export RGBPI_X_OFFSET=6
+export RGBPI_Y_OFFSET=3
+export RGBPI_H_SIZE=-300
+export DISPLAY_FREQUENCY='NTSC'
+export TRINITRON_FIX=1
+

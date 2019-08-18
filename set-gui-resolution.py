@@ -12,19 +12,49 @@ from rgbpi.helpers import resolution
 
 import sys
 import logging
+import os
+
+DISPLAY_X_OFFSET = int(os.environ.get('RGBPI_X_OFFSET', '6'))
+DISPLAY_Y_OFFSET = int(os.environ.get('RGBPI_Y_OFFSET', '6'))
+"""Play with DISPLAY_Y_OFFSET and DISPLAY_X_OFFSET to be able to see the
+   combo moves in Xenogears and other titles very much unaware of display
+   safe zones
+"""
+# used only for some specific emulators
+DISPLAY_H_SIZE = int(os.environ.get('RGBPI_H_SIZE', '-288'))
+# used for most emulators. Good values in [-60;+60]
+DISPLAY_H_ZOOM = int(os.environ.get('RGBPI_H_ZOOM', '-40'))
+"""this is the physical horizontal zoom factor for the image. Good to
+   compensate overscan and shite (you may read RPG texts this way).
+"""
+
+# careful: this is PAL|NTSC, not numbers
+DISPLAY_FREQUENCY = str(os.environ.get('DISPLAY_FREQUENCY', 'NTSC'))
+DISPLAY_TRINITRON_FIX = bool(os.environ.get('TRINITRON_FIX', False))
 
 
 logger = logging.getLogger(__name__)
-
 logging.basicConfig(level=logging.DEBUG)
+
 
 def main(system, emu, rom, cmdline):
     logger.debug("System: %s Emu: %s ROM: %s\nCMDLINE: %s", system, emu, rom, cmdline)
+    if DISPLAY_FREQUENCY == 'PAL':
+        frequency = resolution.FREQ_PAL
+    elif DISPLAY_FREQUENCY == 'NTSC':
+        frequency = resolution.FREQ_NTSC
+    else:
+        raise RuntimeError("Unknown DISPLAY_FREQUENCY %s", DISPLAY_FREQUENCY)
     if system == 'arcade':
         pass
     else:
         logger.debug("Changing resolution...")
-        resolution.set_gui_resolution(trinitron_fix=True)
+        resolution.set_gui_resolution(
+            x_offset=DISPLAY_X_OFFSET,
+            y_offset=DISPLAY_Y_OFFSET,
+            h_size=DISPLAY_H_SIZE,
+            frequency=frequency,
+            trinitron_fix=DISPLAY_TRINITRON_FIX)
         logger.debug("Done changing resolution.")
 
     return 0
