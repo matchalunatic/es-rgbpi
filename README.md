@@ -16,7 +16,7 @@ Thanks to `@aTg` for providing me a good motivation to start this project.
 # License and authors
 
 All Python code is licensed under the GNU GPL v3 and was authored by me,
-Chloé"Matcha" Desoutter.
+[Matcha Luna](https://www.patreon.com/Matcha).
 
 RetroArch and timings files come from the RGB-Pi OS project and are the
 property of `@aTg`, `@Fran_Tron` and `@theretroist`. 
