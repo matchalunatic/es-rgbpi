@@ -28,4 +28,4 @@ cp -nrv opt/retropie/* /opt/retropie/
 cd ..
 echo "Installing resolution management system in /opt/retropie/extras"
 mkdir /opt/retropie/extras/
-cp -r *.py rgbpi/ data/ /opt/retropie/extras
+cp -nrv *.py rgbpi/ data/ /opt/retropie/extras
