@@ -18,3 +18,4 @@ for hookie in /opt/retropie/hooks/${HOOK_TYPE}/*; do
 
     done
 done | tee -a /tmp/runcommand.log
+clear

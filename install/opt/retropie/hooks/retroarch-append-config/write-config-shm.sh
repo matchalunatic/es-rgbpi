@@ -1,7 +1,8 @@
 #!/bin/bash
-system=$1
-emu=$2
-rom=$3
+system="${1:- }"
+emu="${2:- }"
+rom="${3:- }"
+cmdline="${4:- }"
 
 # aspect_ratio_index = "23" is needed for custom display resolutions
 

@@ -37,7 +37,7 @@ fgrep runcommand_retroarch_append_config.sh /opt/retropie/supplementary/runcomma
      [[ -n "$GOVERNOR" ]] && set_governor "$GOVERNOR"
  
      retroarch_append_config
-+    user_script "runcommand_retroarch_append_config.sh"
++    user_script "runcommand-retroarch_append_config.sh"
  
      # workaround for launching xserver on correct/user owned tty
      # see https://github.com/RetroPie/RetroPie-Setup/issues/1805
