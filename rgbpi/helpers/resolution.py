@@ -13,14 +13,19 @@ from math import ceil, floor
 import shlex
 import time
 import subprocess
+import logging
 
-TIMINGS_FILE_CONSOLE = os.path.abspath('../data/console-timings.cfg')
+logger = logging.getLogger(__name__)
+
+TIMINGS_FILE_DIR = os.environ.get('RGBPI_DATA_DIR', os.path.abspath('../data'))
+
+TIMINGS_FILE_CONSOLE = '{}/{}'.format(TIMINGS_FILE_DIR, 'console-timings.cfg')
 TIMINGS_FILES_ARCADE = {
-    'advmame': os.path.abspath('../data/advmame-timings.cfg'),
-    'lr-fba': os.path.abspath('../data/lr-fba-timings.cfg'),
-    'lr-mame2003-plus': os.path.abspath('../data/lr-mame2003-plus-timings.cfg'),
-    'lr-mame2003': os.path.abspath('../data/lr-mame2003-timings.cfg'),
-    'lr-mame2010': os.path.abspath('../data/lr-mame2010-timings.cfg'),
+    'advmame': '{}/{}'.format(TIMINGS_FILE_DIR, 'advmame-timings.cfg'),
+    'lr-fba': '{}/{}'.format(TIMINGS_FILE_DIR, 'advmame-timings.cfg'),
+    'lr-mame2003-plus': '{}/{}'.format(TIMINGS_FILE_DIR, 'advmame-timings.cfg'),
+    'lr-mame2003': '{}/{}'.format(TIMINGS_FILE_DIR, 'advmame-timings.cfg'),
+    'lr-mame2010': '{}/{}'.format(TIMINGS_FILE_DIR, 'advmame-timings.cfg'),
 }
 
 HD_XFACTOR = 6
@@ -44,6 +49,10 @@ FREQ_NTSC = 60.0
 ARCADE_DISPLAY_CROPPED = 'cropped'
 ARCADE_DISPLAY_FORCED = 'forced'
 
+
+CRTINFO_CLI_FIX = CRTInfo(320, 10, 60, 13, 240, 5, 1, 9, 60, 6400000)
+CRTINFO_CLI_STD = CRTInfo(320, 10, 30, 40, 240, 3, 4, 6, 60, 6400000)
+
 def apply_hdmi_timings(crt_info):
     """Take a CRTInfo and apply its settings"""
     COMMAND = ('vcgencmd hdmi_timings {item.h_res} 1 '
@@ -62,26 +71,49 @@ def apply_hdmi_timings(crt_info):
 def prepare_crtinfo_config(vi):
     """Take a VideoInfo, make it a CRT info"""
     # this is critical timing computations 
+    # most display issues will come from this function being fucked with
+    h_fp = vi.h_fp - vi.h_zoom * 4 - vi.h_pos * 4
+    h_bp = vi.h_bp - vi.h_zoom * 4 + vi.h_pos * 4
+    if h_fp < 0:
+        h_fp = 0
+    if h_bp < 0:
+        h_bp = 0
     h_fp = max(vi.h_fp - 4 * (vi.h_zoom + vi.h_pos), 0)
     h_bp = max(vi.h_bp - 4 * (vi.h_zoom - vi.h_pos), 0)
-    h_total = vi.h_res + h_fp + vi.h_sync + vi.h_bp
+    h_total = vi.h_res + vi.h_sync + h_fp + h_bp
     v_total = int(ceil(vi.h_freq / vi.r_rate))
+    logger.debug("H_Freq: %s / R_Rate: %s -> V_Total: %s", vi.h_freq, vi.r_rate, v_total)
     horizontal = int(ceil(v_total * vi.r_rate))
+    logger.debug("V_Total: %s R_Rate: %s -> Horizontal: %s", v_total, vi.r_rate, horizontal)                                                                          
+
     pixel_clock = horizontal * h_total
-    v_fp = int(floor(v_total - vi.v_res - vi.v_sync / 2))
-    v_pos = min(vi.v_pos, v_fp)
-    v_fp -= v_pos
-    v_bp = v_total - vi.v_res - vi.v_sync
+    logger.debug("Horizontal: %s H_Total: %s -> Pixel_Clock: %s", horizontal, h_total, pixel_clock)
+    v_fp = int(floor(((v_total - vi.v_res) - vi.v_sync) /2))
+    
+    v_fp -= min(vi.v_pos, v_fp)
+
+    logger.debug("V_Total: %s V_Res: %s V_Sync: %s V_Pos: %s -> V_FP: %s", v_total, vi.v_res, vi.v_sync, vi.v_pos, v_fp)
+    v_bp = v_total - vi.v_res
+    v_bp = v_bp - vi.v_sync
     v_bp = int(v_bp - v_fp)
+    logger.debug("V_Total: %s V_Res: %s V_Sync: %s V_FP: %s -> V_BP: %s", v_total, vi.v_res, vi.v_sync, v_fp, v_bp)
     info = CRTInfo(
         h_res=vi.h_res, h_fp=h_fp, h_sync=vi.h_sync, h_bp=h_bp,
         v_res=vi.v_res, v_fp=v_fp, v_sync=vi.v_sync, v_bp=v_bp,
         r_rate=vi.r_rate, pixel_clock=pixel_clock)
+
     return info
     
+def set_gui_resolution(x_offset=6, y_offset=3, h_size=-288, frequency=FREQ_NTSC, trinitron_fix=False):
+    if trinitron_fix:
+        crtinfo = CRTINFO_CLI_FIX
+    else:
+        crtinfo = CRTINFO_CLI_STD
+    return apply_hdmi_timings(crtinfo)
 
-def set_console_system_resolution(system, x_offset=0, y_offset=0,
-                               h_size=320, frequency=FREQ_NTSC, trinitron_fix=False):
+
+def set_console_system_resolution(system, x_offset=6, y_offset=3,
+                               h_size=-288, frequency=FREQ_NTSC, trinitron_fix=False):
     """Prepare a VideoInfo for a console using local preferences and
        the systems database
     """
@@ -89,16 +121,23 @@ def set_console_system_resolution(system, x_offset=0, y_offset=0,
 
     if system_video is None:
         raise RuntimeError("Missing timing infos for system {}".format(system))
+    logger.debug("Base system video details for system %s/freq %s: %s)", system, frequency, str(system_video))
     if trinitron_fix:
+        logger.debug("Applying Trinitron fixes")
         system_video = apply_trinitron_fix(system_video)
-    system_details = apply_video_offset(system_video, frequency,
+        logger.debug("New config: %s", system_video)
+    logger.debug("Applying video offset")
+    system_video = apply_video_offset(system_video, frequency,
                                         x_offset, y_offset, h_size)
+    logger.debug("Video offset applied: %s", system_video)
     crtinfo = prepare_crtinfo_config(system_video)
+    logger.debug("Final video settings: %s", str(system_video))
+    logger.debug("CRT details: %s", str(crtinfo))
     return apply_hdmi_timings(crtinfo)
 
 
-def set_arcade_system_resolution(emulator, game, x_offset=0,
-                                     y_offset=0, h_size=320,
+def set_arcade_system_resolution(emulator, game, x_offset=6,
+                                     y_offset=3, h_size=-288,
                                      frequency=FREQ_NTSC, trinitron_fix=False,
                                      arcade_format=ARCADE_DISPLAY_FORCED):
     system_video = load_system_details_arcade(emulator, game)
@@ -159,8 +198,8 @@ def apply_trinitron_fix(vi):
                        v_sync=new_v_sync)
 
 
-def apply_video_offset(vi, frequency=FREQ_NTSC,
-                       x_offset=0, y_offset=0, h_size=320,
+def apply_video_offset(vi, frequency,
+                       x_offset, y_offset, h_size,
                        arcade=False, arcade_format=ARCADE_DISPLAY_FORCED):
     """Transform the display settings in order to account for preferred offset
        and zoom
@@ -178,6 +217,7 @@ def apply_video_offset(vi, frequency=FREQ_NTSC,
         new_h_pos += x_offset / HD_XFACTOR - 8
     else:
         raise RuntimeError("Unhandled case: frequency == ".format(frequency))
+    logger.debug("Computed h_pos: %s", new_h_pos)
     # manage v position
     if frequency == FREQ_NTSC:
         new_v_pos += y_offset
@@ -187,7 +227,7 @@ def apply_video_offset(vi, frequency=FREQ_NTSC,
         raise RuntimeError("Unhandled case: frequency == ".format(frequency))
     # manage zoom
     if vi.system in SPECIAL_RES_SYSTEMS:
-        new_h_zoom += max(h_size / 16, 40)
+        new_h_zoom += min(h_size / 16, 40)
     return vi._replace(
         h_pos=new_h_pos,
         v_pos=new_v_pos,
@@ -259,26 +299,3 @@ __all__ = [
     'HD_XFACTOR',
 ]
 
-if __name__ == '__main__':
-    import sys
-    print("Usage: resolution-utility.py [arcade|console] x_off y_off h_zoom [trinitron_fix|no_trinitron_fix] [pal|ntsc] <game>")
-    sys.exit(0)
-    print("seriously, don't use this crappy CLI, this is an ugly test")
-    arcade = sys.argv[1] == 'arcade'
-    x_offset, y_offset, h_zoom = (int(a) for a in sys.argv[2:5])
-    trinitron_fix = sys.argv[5] == 'trinitron_fix'
-    is_ntsc = sys.argv[6] == 'ntsc'
-    if is_ntsc:
-        frequency = FREQ_NTSC
-    else:
-        frequency = FREQ_PAL
-    if arcade:
-        emulator, game = sys.argv[7:]
-        prepare_arcade_system_resolution(emulator, game, x_offset,
-                                     y_offset, h_zoom,
-                                     frequency, trinitron_fix,
-                                     ARCADE_DISPLAY_FORCED)
-    else:
-        console = sys.argv[7]
-        prepare_console_system_resolution(console, x_offset, y_offset,
-                               h_zoom, frequency, trinitron_fix)
